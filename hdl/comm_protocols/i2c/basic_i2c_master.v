@@ -33,6 +33,8 @@
         - SDA must be pulled up to VCC with a 5.6-kilo-ohm resistor and SCL also needs to be pulled up with the same 
             resistor only if there are multiple masters in the system or when the slave will perform clock stretching 
             as a flow control measure to synchronise with the master.
+        - If ack not received, send stop command
+        - Connect this with a data fifo that stores commands (same on the read side)
 
     Write Procedure States:
         IDLE
@@ -116,8 +118,7 @@ assign i2c_serial_data = (serial_data_out_en) ? sda : 1'bz;
 assign i2c_serial_clk  = (serial_clk_out_en) ? scl : 1'bz;
 
 /* Address and Data Registers */
-reg rw = 1'b0;
-reg [DEV_ADDR_WIDTH-1:0]        dev_addr  = 0;
+reg [DEV_ADDR_WIDTH:0]          dev_addr  = 0; // bit 0 will be read/write bit
 reg [DEV_REG_ADDR_WIDTH-1:0]    reg_addr  = 0;
 reg [DATA_WIDTH-1:0]            wr_data   = 0;
 
@@ -125,20 +126,20 @@ reg [DATA_WIDTH-1:0]            wr_data   = 0;
 localparam IDLE               = 4'd0;
 localparam SEND_START         = 4'd1;
 localparam SEND_DEV_ADDR      = 4'd2;
-localparam SEND_RW_BIT        = 4'd3;
-localparam CHECK_FOR_ACK      = 4'd4;
-localparam SEND_REGISTER_ADDR = 4'd5;
-localparam SEND_DATA_BYTE     = 4'd6;
-localparam SEND_STOP          = 4'd7;
-localparam SEND_RESTART       = 4'd8;
-localparam READ_REGISTER      = 4'd9;
-localparam SEND_NACK          = 4'd10;
+localparam CHECK_FOR_ACK      = 4'd3;
+localparam SEND_REGISTER_ADDR = 4'd4;
+localparam SEND_DATA_BYTE     = 4'd5;
+localparam SEND_STOP          = 4'd6;
+localparam SEND_RESTART       = 4'd7;
+localparam READ_REGISTER      = 4'd8;
+localparam SEND_NACK          = 4'd9;
 
 
 /* Control Registers */
 reg [3:0] state   = IDLE; 
 reg [1:0] step    = 0;
-reg [2:0] bit_cnt = 0;
+reg [3:0] bit_cnt = 0;
+reg ack_recv      = 1'b0;
 
 /* I2C Line Control */
 always @(*) begin
@@ -171,10 +172,9 @@ always @(posedge clk_i or posedge rst_i) begin
                         read_data_o <= 0;
                         if(start_trans_i) begin
                             state <= SEND_START;
-                            dev_addr <= dev_addr_i;
+                            dev_addr <= {dev_addr_i, read_i};
                             reg_addr <= dev_reg_addr_i;
                             wr_data <= wr_data_i;
-                            rw <= read_i;
                             busy_o <= 1'b1;
                         end else begin
                             busy_o <= 1'b0;
@@ -190,7 +190,7 @@ always @(posedge clk_i or posedge rst_i) begin
                                     2'd2:   bit_cnt <= 0;
                                     2'd3:   begin
                                                 scl <= 1'b0;
-                                                sda <= dev_addr[DEV_ADDR_WIDTH - bit_cnt - 1];
+                                                sda <= dev_addr[DEV_ADDR_WIDTH];
                                                 state <= SEND_DEV_ADDR;
                                             end
                                     default: ;
@@ -214,11 +214,10 @@ always @(posedge clk_i or posedge rst_i) begin
                                                     step <= step + 1;
                                                 end
                                         2'd3:   begin
-                                                    if(bit_cnt == DEV_ADDR_WIDTH) begin
-                                                        state <= IDLE; // remove this, only for testing
-                                                        // state <= SEND_RW_BIT;
+                                                    if(bit_cnt == DEV_ADDR_WIDTH + 1) begin
+                                                        state <= CHECK_FOR_ACK;
                                                     end else begin
-                                                        sda <= dev_addr[DEV_ADDR_WIDTH - bit_cnt - 1];
+                                                        sda <= dev_addr[DEV_ADDR_WIDTH - bit_cnt];
                                                     end
                                                     step <= step + 1;
                                                 end
@@ -227,8 +226,67 @@ always @(posedge clk_i or posedge rst_i) begin
                                 end
                             end
 
-            /* SEND_RW_BIT -------------------------------------------------------------- */
-            default: ;
+            /* CHECK_FOR_ACK ------------------------------------------------------------ */
+            CHECK_FOR_ACK:  begin
+                                if(tick) begin
+                                    case(step)
+                                        2'd0:   begin
+                                                    scl <= 1'b1;
+                                                    step <= step + 1;
+                                                end
+                                        2'd1:   begin
+                                                    if(i2c_serial_clk) step <= step + 1; // handle clock stretching
+                                                    ack_recv <= 1'b0;
+                                                end
+                                        2'd2:   begin
+                                                    if(~i2c_serial_data) ack_recv <= 1'b1;
+                                                    step <= step + 1;
+                                                    scl <= 1'b0;
+                                                end
+                                        2'd3:   begin
+                                                    step <= step + 1;
+                                                    if(ack_recv) begin
+                                                        sda <= 1'b1;
+                                                        state <= SEND_REGISTER_ADDR;
+                                                    end else begin
+                                                        state <= SEND_STOP;
+                                                    end
+                                                end
+                                        default: ;
+                                    endcase
+                                end
+                            end
+
+            /* SEND_REGISTER_ADDR ------------------------------------------------------- */
+            /*
+            SEND_REGISTER_ADDR: begin
+                                    if(tick) begin
+                                        case(step)
+                                            2'd0:   begin
+                                                        scl <= 1'b1;
+                                                        step <= step + 1;
+                                                    end
+                                            2'd1:   if(i2c_serial_clk) step <= step + 1; // handle clock stretching
+                                            2'd2:   begin
+                                                        scl <= 1'b0;
+                                                        bit_cnt <= bit_cnt + 1;
+                                                        step <= step + 1;
+                                                    end
+                                            2'd3:   begin
+                                                        if(bit_cnt == DEV_ADDR_WIDTH + 1) begin
+                                                            state <= CHECK_FOR_ACK;
+                                                        end else begin
+                                                            sda <= dev_addr[DEV_ADDR_WIDTH - bit_cnt];
+                                                        end
+                                                        step <= step + 1;
+                                                    end
+                                            default: ;
+                                        endcase
+                                    end
+                                end
+                */
+
+            default: state <= IDLE;
         endcase
     end
 end

@@ -39,9 +39,10 @@ wire tb_i2c_sda;
 reg i2c_sda_driver;
 wire tb_i2c_scl;
 reg i2c_scl_driver;
-assign tb_i2c_sda = i2c_sda_driver;
-assign tb_i2c_scl = i2c_scl_driver;
-
+//assign tb_i2c_sda = i2c_sda_driver;
+//assign tb_i2c_scl = i2c_scl_driver;
+pullup(tb_i2c_sda);
+pullup(tb_i2c_scl);
 
 /* Instantiate DUT */
 basic_i2c_master #(
@@ -63,6 +64,13 @@ basic_i2c_master #(
     .i2c_serial_data(tb_i2c_sda),
     .i2c_serial_clk(tb_i2c_scl)
 );
+
+i2c_slave_dummy slave_dummy (
+    .RST(tb_rst),
+    .SCL(tb_i2c_scl),
+    .SDA(tb_i2c_sda)
+);
+
 
 /* Generate DUT Clock */
 always begin
@@ -129,7 +137,7 @@ initial begin
     /* Basic Write -------------------------------------------------------------- */
     tb_test_num = tb_test_num + 1;
     @(posedge tb_clk);
-    tb_dev_addr = 7'b1010101;
+    tb_dev_addr = 7'h55;
     tb_dev_reg_addr = 8'b10101010;
     tb_wr_data = 8'b11111111;
     tb_read = 1'b0;
