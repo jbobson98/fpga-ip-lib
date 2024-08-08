@@ -1,5 +1,5 @@
 /* time_unit = 1ns, time_precision = 100ps */
-`timescale 1ns / 100ps
+`timescale 1ns / 1ps
 
 module tb_basic_i2c_master ();
 
