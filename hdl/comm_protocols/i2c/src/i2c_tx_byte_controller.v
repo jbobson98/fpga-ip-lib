@@ -53,15 +53,16 @@ always @(posedge i_clk or posedge i_rst) begin
         if(state == 0) begin
             o_tx_done     <= 1'b0;
             o_tx_error    <= 1'b0;
-            o_sda         <= 1'b0;
+            o_sda         <= 1'b1;
             o_scl         <= 1'b0;
+            ack_recv      <= 1'b0;
             if(i_tx_start) begin
                 step     <= 0;
                 tx_data  <= i_tx_data;
                 state    <= state + 1;
                 o_sda    <= i_tx_data[TOTAL_BITS-1];
             end
-        end else if(state >= 1 || state <= 8) begin
+        end else if(state >= 1 && state <= 8) begin
             if(i_tick) begin
                 case(step)
                     2'd0:   begin
@@ -78,7 +79,7 @@ always @(posedge i_clk or posedge i_rst) begin
                                 step <= step + 1;
                                 if(state < 8) o_sda <= tx_data[TOTAL_BITS - state - 1];
                             end
-                    default ;
+                    default: ;
                 endcase
             end
         end else if(state == 9) begin
@@ -90,7 +91,6 @@ always @(posedge i_clk or posedge i_rst) begin
                             end
                     2'd1:   begin
                                 if(i_scl) step <= step + 1; // Check for clock stretching
-                                ack_recv <= 0;
                             end
                     2'd2:   begin
                                 if(~i_sda) ack_recv <= 1'b1;
@@ -98,6 +98,7 @@ always @(posedge i_clk or posedge i_rst) begin
                                 step <= step + 1;
                             end
                     2'd3:   begin
+                                state <= 0;
                                 step <= step + 1;
                                 if(ack_recv) begin
                                     o_sda <= 1'b1;
@@ -106,7 +107,7 @@ always @(posedge i_clk or posedge i_rst) begin
                                     o_tx_error <= 1'b1;
                                 end
                             end
-                    default ;
+                    default: ;
                 endcase
             end
         end else begin

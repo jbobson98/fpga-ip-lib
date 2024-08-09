@@ -10,13 +10,6 @@ localparam FF_SETUP_TIME = 0.190;
 localparam FF_HOLD_TIME  = 0.100;
 localparam CHECK_DELAY   = (CLK_PERIOD_NS - FF_SETUP_TIME); // Check right before the setup time starts
 
-/* I2C Parameters */
-localparam I2C_SCL_FREQ_HZ        = 10_000_000;
-localparam I2C_DEV_ADDR_WDITH     = 7;
-localparam I2C_DEV_REG_ADDR_WIDTH = 8;
-localparam I2C_DATA_WIDTH         = 8; 
-
-
 /* Test Bench Signals */
 integer tb_test_num;
 string tb_test_case;
@@ -24,15 +17,16 @@ string tb_test_case;
 /* DUT Input Port Signals */
 reg tb_clk;
 reg tb_rst;
-reg tb_start_trans;
 reg tb_read;
-reg [I2C_DEV_ADDR_WDITH-1:0] tb_dev_addr;
-reg [I2C_DEV_REG_ADDR_WIDTH-1:0] tb_dev_reg_addr;
-reg [I2C_DATA_WIDTH-1:0] tb_wr_data;
+reg [9:0] tb_dev_addr;
+reg [7:0] tb_wr_data;
+reg [7:0] tb_byte_cnt;
+reg [3:0] tb_control_reg;
+reg [3:0] tb_mode_reg;
+reg tb_rx_data_valid, tb_tx_data_needed;
+reg [7:0] tb_rx_data;
+reg [4:0] tb_status_reg;
 
-/* DUT Output Port Signals */
-reg [I2C_DATA_WIDTH-1:0] tb_read_data;
-reg tb_busy;
 
 /* DUT I2C Port Signals */
 wire tb_i2c_sda;
@@ -45,31 +39,32 @@ pullup(tb_i2c_sda);
 pullup(tb_i2c_scl);
 
 /* Instantiate DUT */
-basic_i2c_master #(
-    .SYS_CLOCK_FREQ(CLOCK_FREQ_HZ),
-    .SCL_FREQ(I2C_SCL_FREQ_HZ),
-    .DEV_ADDR_WIDTH(I2C_DEV_ADDR_WDITH),
-    .DEV_REG_ADDR_WIDTH(I2C_DEV_REG_ADDR_WIDTH),
-    .DATA_WIDTH(I2C_DATA_WIDTH)
+i2c_master #(
+    .SYS_CLOCK_FREQ_HZ(CLOCK_FREQ_HZ),
+    .FAST_MODE_ENABLED(0)
 ) DUT (
-    .clk_i(tb_clk),
-    .rst_i(tb_rst),
-    .start_trans_i(tb_start_trans),
-    .read_i(tb_read),
-    .dev_addr_i(tb_dev_addr),
-    .dev_reg_addr_i(tb_dev_reg_addr),
-    .wr_data_i(tb_wr_data),
-    .read_data_o(tb_read_data),
-    .busy_o(tb_busy),
-    .i2c_serial_data(tb_i2c_sda),
-    .i2c_serial_clk(tb_i2c_scl)
+    .i_clk(tb_clk),
+    .i_rst(tb_rst),
+    .i_slave_addr(tb_dev_addr),
+    .i_byte_cnt(tb_byte_cnt),
+    .i_control_reg(tb_control_reg),
+    .i_mode_reg(tb_mode_reg),
+    .i_tx_data(tb_wr_data),
+    .o_rx_data_valid(tb_rx_data_valid),
+    .o_tx_data_needed(tb_tx_data_needed),
+    .o_rx_data(tb_rx_data),
+    .o_status_reg(tb_status_reg),
+    .io_sda(tb_i2c_sda),
+    .io_scl(tb_i2c_scl)
 );
 
-i2c_slave_dummy slave_dummy (
-    .RST(tb_rst),
+i2c_slave_dummy slave (
     .SCL(tb_i2c_scl),
-    .SDA(tb_i2c_sda)
+    .SDA(tb_i2c_sda),
+    .RST(tb_rst)
 );
+
+
 
 
 /* Generate DUT Clock */
@@ -96,9 +91,9 @@ endtask
 /* Task: Idle (all inputs 0) */
 task i2c_idle;
     begin
-        tb_start_trans = 1'b0;
+        tb_control_reg = 4'b0000;
+        tb_mode_reg = 4'b0000;
         tb_dev_addr = 0;
-        tb_dev_reg_addr = 0;
         tb_read = 0;
         tb_wr_data = 0;
         i2c_sda_driver = 1'bz;
@@ -131,19 +126,20 @@ initial begin
     tb_rst = 1'b0;
     #(CHECK_DELAY);
     //check Signals here
-    //assert(tb_rx_done == 1'b1);
-    //assert(tb_rx_data_o == 8'b00000000);
+
     
     /* Basic Write -------------------------------------------------------------- */
     tb_test_num = tb_test_num + 1;
     @(posedge tb_clk);
-    tb_dev_addr = 7'h55;
-    tb_dev_reg_addr = 8'b10101010;
-    tb_wr_data = 8'b11111111;
+    tb_dev_addr = 10'h55;
+    tb_wr_data = 8'h03;
     tb_read = 1'b0;
-    tb_start_trans = 1'b1;
+    tb_byte_cnt = 8'd2;
+    tb_control_reg = 4'b1000;
     @(posedge tb_clk);
-    tb_start_trans = 1'b0;
+    tb_control_reg = 4'b0000;
+    @(posedge tb_tx_data_needed);
+    tb_wr_data = 8'h57;
 
 
 
