@@ -1,6 +1,6 @@
 `timescale 1ns / 1ps
 
-module i2c_start_generator (
+module i2c_stop_generator (
     input wire i_clk,
     input wire i_rst,
     input wire i_tick,
@@ -20,22 +20,23 @@ reg[2:0] state;
 
 always @(*) begin
     o_done = 1'b0;
-    o_scl  = 1'b1;
-    o_sda  = 1'b1;
+    o_scl  = 1'b0;
+    o_sda  = 1'b0;
     case(state)
-        STEP2:  o_sda = 1'b0;
-        STEP3:  begin
+        STEP2:  begin
                     o_sda = 1'b0;
                     o_scl = 1'b0;
                 end
+        STEP3:  begin
+                    o_sda = 1'b0;
+                    o_scl = 1'b1;
+                end
         STEP4:  begin
-                    o_sda  = 1'b0;
-                    o_scl  = 1'b0;
+                    o_sda  = 1'b1;
+                    o_scl  = 1'b1;
                     o_done = 1'b1;
                 end
         STEP5:  begin
-                    o_sda  = 1'b0;
-                    o_scl  = 1'b0;
                     o_done = 1'b0;
                 end
         default: ;

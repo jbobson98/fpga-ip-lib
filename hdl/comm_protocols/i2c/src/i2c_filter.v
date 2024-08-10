@@ -10,7 +10,7 @@ module i2c_filter (
 reg ff1,ff2,ff3,out_inv;
 assign o_out = ~out_inv;
 
-always @(posedge i_clk or posedge i_rst) begin
+always @(posedge i_clk) begin
     if(i_rst) begin
         ff1 <= 1'b0;
         ff2 <= 1'b0;
@@ -22,7 +22,7 @@ always @(posedge i_clk or posedge i_rst) begin
     end
 end
 
-always @(posedge i_clk or posedge i_rst) begin
+always @(posedge i_clk) begin
     if(i_rst) begin
         out_inv <= 1'b0;
     end else begin

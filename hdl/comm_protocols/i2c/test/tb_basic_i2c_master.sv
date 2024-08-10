@@ -132,7 +132,7 @@ initial begin
     tb_test_num = tb_test_num + 1;
     @(posedge tb_clk);
     tb_dev_addr = 10'h55;
-    tb_wr_data = 8'h03;
+    tb_wr_data = 8'h02;
     tb_read = 1'b0;
     tb_byte_cnt = 8'd2;
     tb_control_reg = 4'b1000;

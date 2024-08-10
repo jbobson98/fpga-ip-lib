@@ -41,14 +41,16 @@ always @(*) begin
 end
 
 /* Transmit State Machine */
-always @(posedge i_clk or posedge i_rst) begin
+always @(posedge i_clk) begin
     if(i_rst) begin
         step          <= 0;
         state         <= 0;
-        o_tx_done     <= 1'b0;
-        o_tx_error    <= 1'b0;
         o_sda         <= 1'b0;
         o_scl         <= 1'b0;
+        o_tx_done     <= 1'b0;
+        o_tx_error    <= 1'b0;
+        ack_recv      <= 1'b0;
+        tx_data       <= 1'b0;
     end else begin
         if(state == 0) begin
             o_tx_done     <= 1'b0;
@@ -77,7 +79,7 @@ always @(posedge i_clk or posedge i_rst) begin
                     2'd3:   begin
                                 state <= state + 1;
                                 step <= step + 1;
-                                if(state < 8) o_sda <= tx_data[TOTAL_BITS - state - 1];
+                                if(state < 8) o_sda <= tx_data[(TOTAL_BITS - state - 1) & 3'b111];
                             end
                     default: ;
                 endcase
