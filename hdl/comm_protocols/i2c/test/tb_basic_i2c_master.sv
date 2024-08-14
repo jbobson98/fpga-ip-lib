@@ -17,7 +17,6 @@ string tb_test_case;
 /* DUT Input Port Signals */
 reg tb_clk;
 reg tb_rst;
-reg tb_read;
 reg [9:0] tb_dev_addr;
 reg [7:0] tb_wr_data;
 reg [7:0] tb_byte_cnt;
@@ -94,7 +93,6 @@ task i2c_idle;
         tb_control_reg = 4'b0000;
         tb_mode_reg = 4'b0000;
         tb_dev_addr = 0;
-        tb_read = 0;
         tb_wr_data = 0;
         i2c_sda_driver = 1'bz;
         i2c_scl_driver = 1'b1;
@@ -133,16 +131,33 @@ initial begin
     @(posedge tb_clk);
     tb_dev_addr = 10'h55;
     tb_wr_data = 8'h02;
-    tb_read = 1'b0;
     tb_byte_cnt = 8'd2;
     tb_control_reg = 4'b1000;
     @(posedge tb_clk);
     tb_control_reg = 4'b0000;
     @(posedge tb_tx_data_needed);
     tb_wr_data = 8'h57;
+    @(negedge tb_status_reg[4]); // wait for tx to be done
+    #(CLK_PERIOD_NS * 3);
 
 
+    /* Basic Read --------------------------------------------------------------- */
+    tb_test_num = tb_test_num + 1;
+    @(posedge tb_clk);
+    tb_dev_addr = 10'h55;
+    tb_wr_data = 8'h02;
+    tb_byte_cnt = 8'd1;
+    tb_mode_reg = 4'b0100;
+    tb_control_reg = 4'b1000;
+    @(posedge tb_clk);
+    tb_control_reg = 4'b0000;
 
+
+    // JMB TODO: error test cases (wrong addrs, etc)
+
+    // JMB TODO: read test cases
+
+    // JMB TODO: 10bit addressing cases at some point
 
 end
 
